@@ -1,0 +1,6 @@
+myenv/
+__pycache__/
+*.pyc
+flask_app/.env
+streamlit_app/.env
+.DS_Store  # MacOS-specific hidden files
