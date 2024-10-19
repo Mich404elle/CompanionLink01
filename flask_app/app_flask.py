@@ -2,13 +2,12 @@ from flask import Flask, request, jsonify, render_template
 import openai
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
-# Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
 
-# Set your OpenAI API key from the environment variable
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
 # Define the text guidance material
@@ -110,20 +109,96 @@ scenarios = [
     },
 ]
 
+open_ended_questions = [
+    "Can you tell me more about your favorite hobbies?",
+    "What's something interesting you've done recently?",
+    "Can you share one of your favorite memories?",
+    "How do you like to spend your weekends?",
+    "What is a skill you’ve always wanted to learn?"
+]
+
 # Store conversation data
 conversations = {}
 
-# Define a route for the index page
+# Route for the index page
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# Define a route for the training guidance
+# Route for the training guidance
 @app.route('/guidance')
 def guidance():
     return render_template('guidance.html', guidance=training_material.split('\n'))
 
-# Define a route for the senior simulation chatbot
+# Route for chatbot for guidance
+@app.route('/chat_guidance')
+def chat_guidance():
+    return render_template('chat_guidance.html')
+
+# Store the index of the current scenario for each session
+scenario_progress = {}
+
+@app.route('/chatbot_guidance', methods=['POST'])
+def chatbot_guidance():
+    data = request.json
+    if 'message' not in data:
+        return jsonify({'error': 'No message provided'}), 400
+
+    session_id = data.get('session_id')
+    if not session_id:
+        return jsonify({'error': 'No session ID provided'}), 400
+
+    user_message = data['message'].lower()
+
+    # Check if it's the start of the conversation
+    if session_id not in scenario_progress:
+        scenario_progress[session_id] = 0  # Start at the first scenario
+        return jsonify({
+            'response': "This chatbot will guide you through different scenarios you may encounter during your conversation with a senior. Type 'yes' to continue."
+        })
+
+    # If the user types "yes", proceed with the first scenario
+    if user_message == "yes" and scenario_progress[session_id] == 0:
+        first_scenario = scenarios[0]["scenario"]
+        scenario_progress[session_id] += 1
+        return jsonify({
+            'response': f"Scenario 1: {first_scenario}. How would you respond?"
+        })
+
+    # Handle scenario responses
+    if 0 < scenario_progress[session_id] <= len(scenarios):
+        current_scenario = scenario_progress[session_id] - 1
+        correct_response = scenarios[current_scenario]['correct_response']
+
+        # Check if the user's answer matches the correct response (basic check for this example)
+        feedback = "Good job! Your answer follows the guidelines." if correct_response.lower() in user_message else f"The recommended response is: {correct_response}"
+
+        # Move to the next scenario or ask the awkward pause question
+        if scenario_progress[session_id] < len(scenarios):
+            next_scenario = scenarios[scenario_progress[session_id]]['scenario']
+            scenario_progress[session_id] += 1
+            return jsonify({
+                'response': f"{feedback}\n\n\n\nScenario {scenario_progress[session_id]}: {next_scenario}. How would you respond?"
+            })
+            # Ask the user about handling awkward pauses after finishing all scenarios
+            scenario_progress[session_id] += 1  # Move to the "awkward pause" question
+            return jsonify({
+                'response': f"{feedback}\n\nYou have completed all the scenarios. Now, how would you handle an awkward pause in the conversation?"
+            })
+
+    # Handle response to the awkward pause question
+    if scenario_progress[session_id] == len(scenarios) + 1:
+        return jsonify({
+            'response': f"That's a good approach! To handle awkward pauses, it's a good idea to ask open-ended questions to keep the conversation going. Here are some suggestions:\n\n" +
+                        "\n".join(open_ended_questions) + "\n\nThank you for participating!"
+        })
+
+    return jsonify({
+        'response': "Please type 'yes' to begin or respond to the current scenario."
+    })
+
+
+# Route for the senior simulation chatbot
 @app.route('/chat')
 def chat():
     return render_template('chat.html')
@@ -160,7 +235,7 @@ def chatbot():
         if "my name is" in message or "i am" in message or "i'm" in message:
             conversations[session_id]['introduced'] = True
 
-    # Use OpenAI's GPT-3.5 Turbo to generate a response simulating Melissa
+    # Use OpenAI's GPT-3.5 Turbo to generate responses simulating Melissa
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
@@ -197,6 +272,7 @@ def chatbot():
 
     return jsonify({'response': response_message, 'warning': warning_message})
 
+# Feedback generation
 @app.route('/feedback', methods=['POST'])
 def feedback():
     data = request.json

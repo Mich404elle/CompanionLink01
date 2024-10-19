@@ -32,7 +32,7 @@ section = st.sidebar.selectbox("Choose Section", ["Chat with Melissa", "Voluntee
 if section == "Chat with Melissa":
     st.header("Chat with Melissa")
 
-    # Use audio_recorder to record the user's voice (Place this code only in the Chat with Melissa section)
+    # Use audio_recorder to record the user's voice
     audio_data = audio_recorder(
         pause_threshold=5.0,  # Maximum silence length before ending the recording
         energy_threshold=300,  # The threshold for detecting voice vs background noise
@@ -43,17 +43,14 @@ if section == "Chat with Melissa":
     # Check if audio data is recorded
     if audio_data is not None:
         st.audio(audio_data, format="audio/wav")  # Play the recorded audio
-        # Save the recorded audio to a temporary file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
             temp_wav.write(audio_data)
-            # Transcribe the audio using OpenAI Whisper
+            # Transcribe using OpenAI Whisper
             transcribed_text = speech_to_text(temp_wav.name)
             st.write(f"You (transcribed): {transcribed_text}")
 
-            # Add the transcribed user message to the conversation
             st.session_state.conversation.append(f"You (transcribed): {transcribed_text}")
 
-            # Get response from Melissa
             bot_response = chatbot_response(transcribed_text)
             st.write(f"Melissa: {bot_response}")
 
